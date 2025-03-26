@@ -1,0 +1,70 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <MPU6050_tockn.h>
+#include <DHT.h>
+
+#define DHTPIN 4
+#define DHTTYPE DHT22
+
+const char* ssid = "จว";      // 🔹 เปลี่ยนเป็นชื่อ WiFi ของคุณ
+const char* password = "0985739501";  // 🔹 เปลี่ยนเป็นรหัสผ่าน WiFi
+const char* server = "http://172.20.10.5/sensor/save_data.php";  // 🔹 แก้เป็น IP ของ XAMPP (ดูวิธีด้านล่าง)
+
+DHT dht(DHTPIN, DHTTYPE);
+MPU6050 mpu6050(Wire);
+const float threshold = 1.2;
+
+void setup() {
+    Serial.begin(115200);
+    WiFi.begin(ssid, password);
+    
+    Serial.print("Connecting to WiFi...");
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.print(".");
+    }
+    Serial.println("\nConnected to WiFi!");
+
+    Wire.begin();
+    mpu6050.begin();
+    mpu6050.calcGyroOffsets(true);
+    dht.begin();
+}
+
+void loop() {
+    mpu6050.update();
+    float accX = mpu6050.getAccX();
+    float accY = mpu6050.getAccY();
+    float accZ = mpu6050.getAccZ();
+    float magnitude = sqrt(accX * accX + accY * accY + accZ * accZ);
+
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+
+    Serial.print("Temp: "); Serial.print(temperature);
+    Serial.print("°C, Humidity: "); Serial.print(humidity);
+    Serial.print("%, Magnitude: "); Serial.print(magnitude);
+    Serial.print(", AccX: "); Serial.print(accX);
+    Serial.print(", AccY: "); Serial.print(accY);
+    Serial.print(", AccZ: "); Serial.println(accZ);
+
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        String url = String(server) + "?temperature=" + String(temperature) +
+                     "&humidity=" + String(humidity) + "&magnitude=" + String(magnitude) +
+                     "&accX=" + String(accX) + "&accY=" + String(accY) + "&accZ=" + String(accZ);
+
+        http.begin(url);
+        int httpResponseCode = http.GET();
+        
+        Serial.print("Server Response: ");
+        Serial.println(httpResponseCode);
+        
+        http.end();
+    } else {
+        Serial.println("WiFi not connected!");
+    }
+
+    delay(5000);  // ส่งข้อมูลทุก 5 วินาที
+}
